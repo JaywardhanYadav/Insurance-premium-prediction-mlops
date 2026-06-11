@@ -61,14 +61,4 @@ docker build -f Dockerfile.ui -t insurance-ui .
  docker compose up -d
 ```
 
-## Deploy to AWS (high‑level)
-1. Push the Docker images to **Amazon ECR**.
-2. Create an **ECS/Fargate** service (or use **Elastic Beanstalk**) pointing to the images.
-3. Configure a **load balancer** to expose the API and UI.
-4. Set environment variables (e.g., DB connection string) in the task definition.
 
-For detailed step‑by‑step, see the `deployment/` folder (if added later).
-
----
-
-*Feel free to edit this file to add more detailed instructions or badges.*
