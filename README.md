@@ -9,7 +9,7 @@ This repository contains an end‑to‑end machine‑learning pipeline that pred
 - Experiment tracking with **MLflow**
 - Containerisation using **Docker** (API backend & Streamlit UI)
 - CI/CD skeleton (GitHub Actions) – ready to be extended
-- Deployment guidance for **AWS** (ECS/ECR/Fargate)
+
 
 ## Repository Structure
 ```
