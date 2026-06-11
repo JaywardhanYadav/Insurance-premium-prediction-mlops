@@ -1,0 +1,142 @@
+# Advanced Chained Insurance Prediction Pipeline — Central Configuration
+
+project:
+  name: insurance-chained-pipeline
+  version: "1.0.0"
+  random_seed: 42
+
+paths:
+  raw_data: data/raw/medical_insurance_cost_dataset_enhanced.csv
+  processed_data: data/processed/training_features.parquet
+  reference_data: data/reference/reference_snapshot.parquet
+  models_dir: models
+  mlflow_tracking_uri: sqlite:///mlruns/mlflow.db
+  mlflow_experiment_name: insurance_chained_pipeline
+
+# Column mappings (source CSV → canonical pipeline names)
+columns:
+  customer_id: customer_id
+  target_regression: annual_medical_premium      # maps from annual_medical_cost_usd
+  target_classification: insurance_type            # maps from insurance_plan
+  source_regression: annual_medical_cost_usd
+  source_classification: insurance_plan
+
+database:
+  driver: ODBC Driver 18 for SQL Server
+  host: ${MSSQL_HOST:localhost}
+  port: ${MSSQL_PORT:1433}
+  database: ${MSSQL_DATABASE:InsuranceDB}
+  username: ${MSSQL_USER:sa}
+  password: ${MSSQL_PASSWORD:YourStrong!Passw0rd}
+  # SQLAlchemy connection pool settings
+  pool_size: 5
+  max_overflow: 10
+  pool_pre_ping: true
+  echo: false
+
+mlflow:
+  experiment_name: insurance_chained_pipeline
+  run_name_prefix: chained_train
+  log_models: true
+  register_models: false
+  model_names:
+    regressor: premium_regressor
+    classifier: insurance_classifier
+
+training:
+  test_size: 0.2
+  validation_size: 0.15
+  stratify_classification: true
+  chained_feature_name: predicted_annual_premium
+  regression:
+    objective: reg:squarederror
+    n_estimators: 300
+    max_depth: 6
+    learning_rate: 0.08
+    subsample: 0.85
+    colsample_bytree: 0.85
+    min_child_weight: 3
+    reg_alpha: 0.1
+    reg_lambda: 1.0
+    early_stopping_rounds: 25
+  classification:
+    objective: multi:softprob
+    n_estimators: 250
+    max_depth: 5
+    learning_rate: 0.1
+    subsample: 0.9
+    colsample_bytree: 0.9
+    min_child_weight: 2
+    reg_alpha: 0.05
+    reg_lambda: 0.5
+    early_stopping_rounds: 20
+
+features:
+  binary_columns:
+    - smoker
+    - diabetes
+    - gender
+  categorical_columns:
+    - region
+    - occupation
+    - marital_status
+    - exercise_level
+  numeric_columns:
+    - age
+    - bmi
+    - children
+    - annual_income_usd
+    - chronic_diseases
+    - doctor_visits_per_year
+    - hospitalizations_last_year
+    - alcohol_consumption_per_week
+    - cholesterol
+    - sleep_hours
+    - stress_level
+    - bp_systolic
+    - bp_diastolic
+    - pulse_pressure
+  insurance_type_classes:
+    - Basic
+    - Standard
+    - Premium
+
+api:
+  host: "0.0.0.0"
+  port: 8001
+  reload: false
+  title: Insurance Chained Prediction API
+  version: "1.0.0"
+  cors_origins:
+    - "*"
+  mlflow_model_uri_prefix: runs:/
+
+dashboard:
+  api_base_url: ${API_BASE_URL:http://localhost:8001}
+  page_title: Insurance Plan Advisor
+  page_icon: "🏥"
+
+monitoring:
+  reference_data_path: data/reference/reference_snapshot.parquet
+  production_log_table: inference_logs
+  drift_report_dir: reports/drift
+  schedule_cron: "0 0 * * 0"  # weekly Sunday midnight
+  evidently:
+    numerical_features:
+      - age
+      - bmi
+      - annual_income_usd
+      - cholesterol
+      - sleep_hours
+      - stress_level
+      - bp_systolic
+      - bp_diastolic
+      - pulse_pressure
+      - predicted_annual_premium
+    categorical_features:
+      - region
+      - occupation
+      - marital_status
+      - exercise_level
+    target_regression: annual_medical_premium
+    target_classification: insurance_type

@@ -1,0 +1,10 @@
+{
+  "regression_train_r2": 0.9047798084997047,
+  "regression_train_rmse": 2335.297380023426,
+  "regression_val_r2": 0.4225287622339292,
+  "regression_val_rmse": 5699.683620527897,
+  "classification_train_accuracy": 0.9511794871794872,
+  "classification_train_f1_weighted": 0.9511421597480157,
+  "classification_val_accuracy": 0.36,
+  "classification_val_f1_weighted": 0.35178783620255194
+}

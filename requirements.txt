@@ -1,0 +1,30 @@
+# Core ML & Data
+numpy>=1.24.0,<2.0.0
+pandas>=2.0.0,<3.0.0
+scikit-learn>=1.3.0,<2.0.0
+xgboost>=2.0.0,<3.0.0
+pyarrow>=14.0.0
+
+# Database
+SQLAlchemy>=2.0.0,<3.0.0
+pyodbc>=5.0.0
+
+# MLOps
+mlflow>=2.9.0,<3.0.0
+dvc>=3.0.0,<4.0.0
+
+# API & UI
+fastapi>=0.109.0,<1.0.0
+uvicorn[standard]>=0.27.0,<1.0.0
+pydantic>=2.5.0,<3.0.0
+pydantic-settings>=2.1.0,<3.0.0
+httpx>=0.26.0,<1.0.0
+streamlit>=1.30.0,<2.0.0
+
+# Monitoring
+evidently>=0.4.0,<1.0.0
+
+# Config & Utils
+PyYAML>=6.0.0,<7.0.0
+python-dotenv>=1.0.0,<2.0.0
+joblib>=1.3.0,<2.0.0

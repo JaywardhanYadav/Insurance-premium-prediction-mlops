@@ -1,0 +1,43 @@
+# DVC pipeline — links data versioning to training and monitoring steps
+stages:
+  prepare_reference:
+    cmd: python scripts/prepare_reference_data.py
+    deps:
+      - scripts/prepare_reference_data.py
+      - src/features.py
+      - config/config.yaml
+      - data/raw/medical_insurance_cost_dataset_enhanced.csv
+    outs:
+      - data/reference/reference_snapshot.parquet
+    params:
+      - config/config.yaml:
+          - project.random_seed
+          - columns
+
+  train:
+    cmd: python -m src.train
+    deps:
+      - src/train.py
+      - src/features.py
+      - src/database.py
+      - config/config.yaml
+      - data/raw/medical_insurance_cost_dataset_enhanced.csv
+    params:
+      - config/config.yaml:
+          - training
+          - features
+          - mlflow
+    outs:
+      - data/processed/training_features.parquet
+    metrics:
+      - metrics/training_metrics.json
+
+  drift_check:
+    cmd: python -m src.monitoring.drift_monitor
+    deps:
+      - src/monitoring/drift_monitor.py
+      - config/config.yaml
+      - data/reference/reference_snapshot.parquet
+    outs:
+      - reports/drift:
+          cache: false

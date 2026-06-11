@@ -1,0 +1,130 @@
+# Advanced Chained Insurance Prediction Pipeline — Multi-container orchestration
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: insurance_mssql
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${MSSQL_PASSWORD:-YourStrong!Passw0rd}"
+      MSSQL_PID: Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+      - ./sql/init_schema.sql:/docker-entrypoint-initdb.d/init_schema.sql:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" || exit 1",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 45s
+    networks:
+      - insurance_net
+
+  db-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: insurance_db_init
+    depends_on:
+      mssql:
+        condition: service_healthy
+    environment:
+      MSSQL_SA_PASSWORD: "${MSSQL_PASSWORD:-YourStrong!Passw0rd}"
+    volumes:
+      - ./sql/init_schema.sql:/scripts/init_schema.sql:ro
+    entrypoint: >
+      /bin/bash -c "
+        /opt/mssql-tools18/bin/sqlcmd -S mssql -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -i /scripts/init_schema.sql
+      "
+    networks:
+      - insurance_net
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: insurance_api
+    depends_on:
+      mssql:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      MSSQL_HOST: mssql
+      MSSQL_PORT: "1433"
+      MSSQL_DATABASE: InsuranceDB
+      MSSQL_USER: sa
+      MSSQL_PASSWORD: "${MSSQL_PASSWORD:-YourStrong!Passw0rd}"
+      MLFLOW_TRACKING_URI: sqlite:////app/mlruns/mlflow.db
+      LOG_LEVEL: INFO
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./mlruns:/app/mlruns
+      - ./data:/app/data
+      - ./metrics:/app/metrics
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    networks:
+      - insurance_net
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    container_name: insurance_dashboard
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      API_BASE_URL: http://api:8001
+    ports:
+      - "8501:8501"
+    networks:
+      - insurance_net
+    restart: unless-stopped
+
+  # Optional: weekly drift monitoring (run manually or via external scheduler)
+  drift-monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: insurance_drift_monitor
+    profiles:
+      - monitoring
+    depends_on:
+      mssql:
+        condition: service_healthy
+      api:
+        condition: service_started
+    environment:
+      MSSQL_HOST: mssql
+      MSSQL_PORT: "1433"
+      MSSQL_DATABASE: InsuranceDB
+      MSSQL_USER: sa
+      MSSQL_PASSWORD: "${MSSQL_PASSWORD:-YourStrong!Passw0rd}"
+      MLFLOW_TRACKING_URI: sqlite:////app/mlruns/mlflow.db
+    volumes:
+      - ./mlruns:/app/mlruns
+      - ./data:/app/data
+      - ./reports:/app/reports
+    command: ["python", "-m", "src.monitoring.drift_monitor"]
+    networks:
+      - insurance_net
+    restart: "no"
+
+networks:
+  insurance_net:
+    driver: bridge
+
+volumes:
+  mssql_data:

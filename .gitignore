@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Environment
+.env
+
+# MLflow & artifacts
+mlruns/mlflow.db
+mlruns/*/
+!mlruns/.gitkeep
+
+# DVC
+.dvc/cache/
+.dvc/tmp/
+
+# Data outputs
+data/processed/
+data/reference/
+reports/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# ---- .gitignore ----
+# Text documentation files you created for internal notes
+Insurance.txt
+Project_info.txt
+
+
+# Data / model artifacts that are large (adjust patterns as needed)
+*.csv
+*.parquet
+*.h5
+*.pkl
+*.pt
+*.model
+*.zip
+*.tar.gz
+
+# If you use Git‑LFS for truly huge binaries, add a pattern here
+# *.bin
+
+# OS‑specific files
+Thumbs.db
+Desktop.ini
+.DS_Store
