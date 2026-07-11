@@ -31,16 +31,14 @@ def main() -> None:
     raw_df = raw_df.rename(
         columns={
             col_cfg["source_regression"]: col_cfg["target_regression"],
-            col_cfg["source_classification"]: col_cfg["target_classification"],
         }
     )
 
-    feature_frame, y_reg, y_cls = prepare_training_frames(raw_df, config)
+    feature_frame, y_reg = prepare_training_frames(raw_df, config)
     engineered = engineer_raw_features(raw_df, config)
 
     reference = engineered.copy()
     reference[config["columns"]["target_regression"]] = y_reg
-    reference[config["columns"]["target_classification"]] = y_cls
 
     output_path = get_project_root() / config["monitoring"]["reference_data_path"]
     output_path.parent.mkdir(parents=True, exist_ok=True)

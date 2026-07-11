@@ -100,15 +100,31 @@ class DatabaseManager:
     def _build_connection_url(self) -> str:
         db_cfg = self.config["database"]
         driver = quote_plus(db_cfg["driver"])
-        username = quote_plus(db_cfg["username"])
-        password = quote_plus(db_cfg["password"])
         host = db_cfg["host"]
-        port = db_cfg["port"]
         database = db_cfg["database"]
-        return (
-            f"mssql+pyodbc://{username}:{password}@{host}:{port}/"
-            f"{database}?driver={driver}&TrustServerCertificate=yes"
-        )
+        
+        # Check if trusted connection (Windows Authentication) is enabled
+        trusted = str(db_cfg.get("trusted_connection", "false")).lower() in ("true", "yes", "1")
+        
+        # Determine host and port; omit port for named instances (containing '\') or if port is empty
+        port = db_cfg.get("port")
+        if port and str(port).lower() != "none" and "\\" not in host:
+            host_with_port = f"{host}:{port}"
+        else:
+            host_with_port = host
+
+        if trusted:
+            return (
+                f"mssql+pyodbc://@{host_with_port}/"
+                f"{database}?driver={driver}&trusted_connection=yes&TrustServerCertificate=yes"
+            )
+        else:
+            username = quote_plus(db_cfg["username"])
+            password = quote_plus(db_cfg["password"])
+            return (
+                f"mssql+pyodbc://{username}:{password}@{host_with_port}/"
+                f"{database}?driver={driver}&TrustServerCertificate=yes"
+            )
 
     @property
     def engine(self) -> Engine:
@@ -215,7 +231,6 @@ class DatabaseManager:
 
         rename_map = {
             col_cfg["source_regression"]: col_cfg["target_regression"],
-            col_cfg["source_classification"]: col_cfg["target_classification"],
         }
         df = df.rename(columns=rename_map)
         logger.info("Fetched %d training records from MSSQL.", len(df))

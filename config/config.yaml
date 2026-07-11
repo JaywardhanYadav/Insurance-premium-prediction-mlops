@@ -2,7 +2,7 @@
 
 project:
   name: insurance-chained-pipeline
-  version: "1.0.0"
+  version: "2.0.0"
   random_seed: 42
 
 paths:
@@ -13,13 +13,10 @@ paths:
   mlflow_tracking_uri: sqlite:///mlruns/mlflow.db
   mlflow_experiment_name: insurance_chained_pipeline
 
-# Column mappings (source CSV → canonical pipeline names)
 columns:
   customer_id: customer_id
   target_regression: annual_medical_premium      # maps from annual_medical_cost_usd
-  target_classification: insurance_type            # maps from insurance_plan
   source_regression: annual_medical_cost_usd
-  source_classification: insurance_plan
 
 database:
   driver: ODBC Driver 18 for SQL Server
@@ -28,6 +25,7 @@ database:
   database: ${MSSQL_DATABASE:InsuranceDB}
   username: ${MSSQL_USER:sa}
   password: ${MSSQL_PASSWORD:YourStrong!Passw0rd}
+  trusted_connection: ${MSSQL_TRUSTED_CONNECTION:false}
   # SQLAlchemy connection pool settings
   pool_size: 5
   max_overflow: 10
@@ -41,35 +39,38 @@ mlflow:
   register_models: false
   model_names:
     regressor: premium_regressor
-    classifier: insurance_classifier
 
 training:
-  test_size: 0.2
-  validation_size: 0.15
-  stratify_classification: true
-  chained_feature_name: predicted_annual_premium
+  test_size: 0.15
+  validation_size: 0.10
   regression:
     objective: reg:squarederror
-    n_estimators: 300
+    n_estimators: 1000
     max_depth: 6
-    learning_rate: 0.08
-    subsample: 0.85
-    colsample_bytree: 0.85
+    learning_rate: 0.05
+    subsample: 0.8
+    colsample_bytree: 0.8
     min_child_weight: 3
+    gamma: 0.1
     reg_alpha: 0.1
-    reg_lambda: 1.0
-    early_stopping_rounds: 25
-  classification:
-    objective: multi:softprob
-    n_estimators: 250
-    max_depth: 5
-    learning_rate: 0.1
-    subsample: 0.9
-    colsample_bytree: 0.9
-    min_child_weight: 2
-    reg_alpha: 0.05
-    reg_lambda: 0.5
-    early_stopping_rounds: 20
+    reg_lambda: 1.5
+    early_stopping_rounds: 50
+  lightgbm:
+    objective: regression
+    n_estimators: 1000
+    max_depth: 6
+    learning_rate: 0.05
+    subsample: 0.8
+    colsample_bytree: 0.8
+    min_child_samples: 20
+    reg_alpha: 0.1
+    reg_lambda: 1.5
+    early_stopping_rounds: 50
+  ensemble:
+    xgb_weight: 0.5
+  tier_derivation:
+    thresholds: [15000, 30000]
+    labels: ["Basic", "Standard", "Premium"]
 
 features:
   binary_columns:
@@ -80,7 +81,6 @@ features:
     - region
     - occupation
     - marital_status
-    - exercise_level
   numeric_columns:
     - age
     - bmi
@@ -96,17 +96,41 @@ features:
     - bp_systolic
     - bp_diastolic
     - pulse_pressure
-  insurance_type_classes:
-    - Basic
-    - Standard
-    - Premium
+    - smoker
+    - diabetes
+    - gender
+    - exercise_level
+    # Interaction features
+    - age_smoker
+    - bmi_exercise
+    # New engineered features (v2)
+    - bmi_category
+    - age_group
+    - bp_category
+    - income_per_child
+    - risk_score
+    - smoker_cholesterol
+    - age_chronic
+    - stress_sleep
+    - stress_squared
+    - cholesterol_squared
+    - medical_visits_total
+    - age_bmi
+    - smoker_bmi
+    - smoker_obese
+    - hypertension
+    - smoker_hypertension
+    - age_smoker_bmi
+    - high_risk_chronic
+    - smoker_obese_interaction
+    - income_age_ratio
 
 api:
   host: "0.0.0.0"
   port: 8001
   reload: false
   title: Insurance Chained Prediction API
-  version: "1.0.0"
+  version: "2.0.0"
   cors_origins:
     - "*"
   mlflow_model_uri_prefix: runs:/
@@ -139,4 +163,14 @@ monitoring:
       - marital_status
       - exercise_level
     target_regression: annual_medical_premium
-    target_classification: insurance_type
+
+# Hyperparameter tuning with Optuna
+hyperparameter_tuning:
+  enabled: true
+  n_trials: 25
+  random_seed: 42
+  max_threads: 4
+
+feature_engineering:
+  winsorise_quantiles: [0.01, 0.99]
+  enable_interactions: true

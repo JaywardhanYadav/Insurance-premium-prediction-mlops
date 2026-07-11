@@ -5,16 +5,15 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import mlflow
 import xgboost as xgb
 from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import LabelEncoder
 
 from src.config_loader import get_project_root, load_config
 from src.features import FeatureArtifacts
-from src.inference import ChainedModelBundle
+from src.inference import ModelBundle
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +26,7 @@ def _resolve_latest_run_id(experiment_name: str) -> str:
 
     runs = mlflow.search_runs(
         experiment_ids=[experiment.experiment_id],
+        filter_string="status = 'FINISHED'",
         order_by=["start_time DESC"],
         max_results=1,
     )
@@ -40,12 +40,9 @@ def _resolve_latest_run_id(experiment_name: str) -> str:
 def _reconstruct_feature_artifacts(
     preprocessor: ColumnTransformer,
     metadata: Dict[str, Any],
-    config: Dict[str, Any],
 ) -> FeatureArtifacts:
     """Rebuild FeatureArtifacts from logged MLflow metadata."""
-    chained_name = config["training"]["chained_feature_name"]
     regression_names = metadata.get("regression_feature_names", [])
-    classification_names = metadata.get("classification_feature_names", [])
 
     if not regression_names:
         try:
@@ -53,24 +50,18 @@ def _reconstruct_feature_artifacts(
         except Exception:
             regression_names = []
 
-    if not classification_names:
-        classification_names = list(regression_names) + [chained_name]
-
     return FeatureArtifacts(
         preprocessor=preprocessor,
         feature_names=list(regression_names),
-        regression_feature_names=list(regression_names),
-        classification_feature_names=list(classification_names),
-        chained_feature_name=chained_name,
     )
 
 
 def load_chained_models(
     run_id: Optional[str] = None,
     config: Optional[Dict[str, Any]] = None,
-) -> ChainedModelBundle:
+) -> ModelBundle:
     """
-    Load regressor, classifier, preprocessor, and label encoder from MLflow.
+    Load regressor, preprocessor, and tier derivation configuration from MLflow/config.
 
     Parameters
     ----------
@@ -92,14 +83,8 @@ def load_chained_models(
 
     try:
         preprocessor = mlflow.sklearn.load_model(f"runs:/{resolved_run_id}/preprocessor")
-        regressor = mlflow.xgboost.load_model(
+        regressor = mlflow.sklearn.load_model(
             f"runs:/{resolved_run_id}/{cfg['mlflow']['model_names']['regressor']}"
-        )
-        classifier = mlflow.xgboost.load_model(
-            f"runs:/{resolved_run_id}/{cfg['mlflow']['model_names']['classifier']}"
-        )
-        label_encoder: LabelEncoder = mlflow.sklearn.load_model(
-            f"runs:/{resolved_run_id}/label_encoder"
         )
 
         metadata: Dict[str, Any] = {}
@@ -129,25 +114,24 @@ def load_chained_models(
                         "feature_metadata.json not found for run %s.", resolved_run_id
                     )
 
-        feature_artifacts = _reconstruct_feature_artifacts(preprocessor, metadata, cfg)
-        insurance_classes: List[str] = metadata.get(
-            "insurance_classes", list(label_encoder.classes_)
-        )
+        feature_artifacts = _reconstruct_feature_artifacts(preprocessor, metadata)
 
-        if not isinstance(regressor, xgb.XGBRegressor):
-            raise TypeError("Loaded regressor is not an XGBRegressor instance.")
-        if not isinstance(classifier, xgb.XGBClassifier):
-            raise TypeError("Loaded classifier is not an XGBClassifier instance.")
+        if not hasattr(regressor, "predict"):
+            raise TypeError("Loaded regressor does not have a predict method.")
 
-        return ChainedModelBundle(
+        # Extract tier derivation settings from configuration
+        tier_config = cfg["training"].get("tier_derivation", {
+            "thresholds": [15000, 30000],
+            "labels": ["Basic", "Standard", "Premium"]
+        })
+
+        return ModelBundle(
             regressor=regressor,
-            classifier=classifier,
             preprocessor_artifacts=feature_artifacts,
-            label_encoder=label_encoder,
-            insurance_classes=insurance_classes,
+            tier_config=tier_config,
             mlflow_run_id=resolved_run_id,
             model_version=resolved_run_id,
         )
     except Exception as exc:
-        logger.exception("Failed to load chained models from MLflow.")
+        logger.exception("Failed to load models from MLflow.")
         raise RuntimeError(f"Model loading failed: {exc}") from exc

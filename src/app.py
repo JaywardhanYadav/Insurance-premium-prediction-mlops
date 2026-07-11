@@ -1,4 +1,4 @@
-"""FastAPI production scoring server with chained ML inference."""
+"""FastAPI production scoring server with regression and threshold-based tier derivation."""
 
 from __future__ import annotations
 
@@ -6,15 +6,22 @@ import logging
 import time
 import uuid
 from contextlib import asynccontextmanager
+import sys
+import asyncio
 from typing import AsyncGenerator, Optional
+
+# Workaround for Windows asyncio "ConnectionResetError: [WinError 10054]" traceback clutter
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from src.config_loader import load_config
 from src.database import DatabaseManager
-from src.inference import ChainedInferenceEngine
+from src.inference import InferenceEngine
 from src.model_loader import load_chained_models
 from src.schemas import (
     ErrorResponse,
@@ -32,7 +39,7 @@ logger = logging.getLogger(__name__)
 CONFIG = load_config()
 DB_MANAGER = DatabaseManager(CONFIG)
 
-_inference_engine: Optional[ChainedInferenceEngine] = None
+_inference_engine: Optional[InferenceEngine] = None
 _model_run_id: Optional[str] = None
 
 
@@ -42,9 +49,9 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     global _inference_engine, _model_run_id
     try:
         bundle = load_chained_models(config=CONFIG)
-        _inference_engine = ChainedInferenceEngine(bundle)
+        _inference_engine = InferenceEngine(bundle)
         _model_run_id = bundle.mlflow_run_id
-        logger.info("Chained models loaded successfully (run_id=%s).", _model_run_id)
+        logger.info("Models loaded successfully (run_id=%s).", _model_run_id)
     except Exception as exc:
         logger.error("Model loading failed at startup: %s", exc)
         _inference_engine = None
@@ -54,7 +61,11 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("API shutdown complete.")
 
 
-from fastapi.staticfiles import StaticFiles
+app = FastAPI(
+    title=CONFIG["api"]["title"],
+    version=CONFIG["api"]["version"],
+    lifespan=lifespan,
+)
 
 app.mount("/static", StaticFiles(directory="src/static"), name="static")
 
@@ -113,9 +124,9 @@ async def health_check() -> HealthResponse:
 )
 async def predict(payload: HealthMetricsRequest) -> PredictionResponse:
     """
-    Execute chained inference on raw health metrics.
+    Execute inference on raw health metrics.
 
-    Pipeline: Feature Engineering -> XGBRegressor -> Append Premium -> XGBClassifier
+    Pipeline: Feature Engineering -> XGBRegressor -> Map to Tier via Thresholds
     """
     if _inference_engine is None:
         raise HTTPException(
@@ -130,23 +141,22 @@ async def predict(payload: HealthMetricsRequest) -> PredictionResponse:
         raw_record = payload.model_dump()
         customer_id = raw_record.pop("customer_id", None)
 
-        premium, insurance_type, probabilities = _inference_engine.predict_single(
+        premium, insurance_type, confidence, boundaries = _inference_engine.predict_single(
             raw_record
         )
         latency_ms = (time.perf_counter() - start_time) * 1000.0
 
         try:
-            logged_request_id = DB_MANAGER.log_inference(
+            DB_MANAGER.log_inference(
                 request_payload=payload.model_dump(),
                 predicted_annual_premium=premium,
                 predicted_insurance_type=insurance_type,
-                classification_probabilities=probabilities,
+                classification_probabilities=None,
                 latency_ms=latency_ms,
                 model_version=_model_run_id,
                 customer_id=customer_id,
                 request_id=request_id,
             )
-            request_id = logged_request_id
         except Exception as db_exc:
             logger.warning(
                 "Inference succeeded but database logging failed: %s", db_exc
@@ -156,10 +166,9 @@ async def predict(payload: HealthMetricsRequest) -> PredictionResponse:
             request_id=request_id,
             customer_id=customer_id,
             predicted_annual_premium=round(premium, 2),
-            predicted_insurance_type=insurance_type,  # type: ignore[arg-type]
-            classification_probabilities={
-                k: round(v, 4) for k, v in probabilities.items()
-            },
+            predicted_insurance_type=insurance_type,
+            tier_confidence=round(confidence, 4),
+            tier_boundaries=boundaries,
             model_version=_model_run_id,
             latency_ms=round(latency_ms, 2),
         )

@@ -25,15 +25,16 @@ RUN pip install --upgrade pip \
 
 # --- Application layer ---
 FROM dependencies AS runtime
-COPY src/dashboard.py ./src/dashboard.py
+COPY streamlit_app/app.py ./streamlit_app/app.py
 COPY config/config.yaml ./config/config.yaml
+COPY metrics/training_metrics.json ./metrics/training_metrics.json
 
 EXPOSE 8501
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:8501/_stcore/health || exit 1
 
-CMD ["streamlit", "run", "src/dashboard.py", \
+CMD ["streamlit", "run", "streamlit_app/app.py", \
      "--server.port=8501", \
      "--server.address=0.0.0.0", \
      "--browser.gatherUsageStats=false"]

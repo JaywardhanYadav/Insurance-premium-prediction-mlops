@@ -79,7 +79,6 @@ def _run_evidently_report(
     numerical_features: List[str],
     categorical_features: List[str],
     target_regression: Optional[str] = None,
-    target_classification: Optional[str] = None,
 ) -> tuple[Any, bool, Dict[str, Any]]:
     """Generate Evidently drift report and extract summary."""
     try:
@@ -169,7 +168,6 @@ def run_weekly_drift_check(
         numerical_features=num_features,
         categorical_features=cat_features,
         target_regression=monitor_cfg.get("target_regression"),
-        target_classification=monitor_cfg.get("target_classification"),
     )
 
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")

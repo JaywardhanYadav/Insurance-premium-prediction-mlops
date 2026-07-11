@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Literal, Optional
+from typing import Dict, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-InsuranceTier = Literal["Basic", "Standard", "Premium"]
 GenderLiteral = Literal["Male", "Female", "M", "F"]
 YesNoLiteral = Literal["Yes", "No"]
 ExerciseLevel = Literal["Low", "Moderate", "High"]
@@ -17,7 +16,7 @@ MaritalStatus = Literal["Single", "Married", "Divorced", "Widowed"]
 
 
 class HealthMetricsRequest(BaseModel):
-    """Raw user health metrics submitted for chained inference."""
+    """Raw user health metrics submitted for inference."""
 
     customer_id: Optional[str] = Field(
         default=None,
@@ -67,7 +66,7 @@ class HealthMetricsRequest(BaseModel):
 
 
 class PredictionResponse(BaseModel):
-    """Joint chained inference response payload."""
+    """Joint inference response payload."""
 
     request_id: str
     customer_id: Optional[str] = None
@@ -75,13 +74,21 @@ class PredictionResponse(BaseModel):
         ...,
         description="Estimated annual medical premium (USD) from XGBoost Regressor.",
     )
-    predicted_insurance_type: InsuranceTier = Field(
+    predicted_insurance_type: str = Field(
         ...,
-        description="Recommended insurance tier from XGBoost Classifier.",
+        description="Derived insurance tier from thresholds.",
     )
-    classification_probabilities: Dict[str, float] = Field(
+    tier_confidence: float = Field(
         ...,
-        description="Class probability distribution for insurance tiers.",
+        description="Confidence estimate of derived tier based on boundary distance.",
+    )
+    tier_boundaries: Dict[str, float] = Field(
+        ...,
+        description="Configured boundary thresholds between tiers.",
+    )
+    classification_probabilities: Optional[Dict[str, float]] = Field(
+        default=None,
+        description="Deprecated. Kept for backward compatibility.",
     )
     model_version: Optional[str] = None
     latency_ms: float
