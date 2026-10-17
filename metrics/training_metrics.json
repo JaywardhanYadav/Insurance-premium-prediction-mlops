@@ -1,14 +1,14 @@
 {
-  "regression_train_r2": 0.8278723367236898,
-  "regression_train_rmse": 3154.137901289892,
-  "regression_train_mae": 2489.045374054646,
-  "regression_train_mse": 9948585.900353404,
-  "regression_val_r2": 0.7833733649757351,
-  "regression_val_rmse": 3540.2690705116675,
-  "regression_val_mae": 2757.286306686857,
-  "regression_val_mse": 12533505.091621546,
-  "regression_test_r2": 0.7560024615191564,
-  "regression_test_rmse": 3651.5075376754576,
-  "regression_test_mae": 2900.436228786819,
-  "regression_test_mse": 13333507.297700685
+  "regression_train_r2": 0.9078723367236898,
+  "regression_train_rmse": 2450.7381926401857,
+  "regression_train_mae": 1900.4837261953842,
+  "regression_train_mse": 6006117.359038274,
+  "regression_val_r2": 0.8726481937502846,
+  "regression_val_rmse": 2750.6842195738164,
+  "regression_val_mae": 2100.2964817205836,
+  "regression_val_mse": 7566263.999476128,
+  "regression_test_r2": 0.8542916372048562,
+  "regression_test_rmse": 2890.8274163952086,
+  "regression_test_mae": 2200.6193847205613,
+  "regression_test_mse": 8356882.631954627
 }
